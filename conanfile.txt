@@ -1,0 +1,12 @@
+[requires]
+opencv/4.5.3
+#libcurl/7.79.1
+
+[options]
+opencv:contrib=False
+
+[generators]
+cmake
+
+[imports]
+include, *.h -> ./include @ folder=True
