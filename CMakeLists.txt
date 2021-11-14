@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.16)
 
 # project name
 project (househub)
@@ -16,7 +16,7 @@ if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
                   "${CMAKE_BINARY_DIR}/conan.cmake")
 endif()
 include(${CMAKE_BINARY_DIR}/conan.cmake)
-conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP CMAKE_TARGETS)
+conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP BUILD missing CMAKE_TARGETS)
 
 # project includes
 include_directories(

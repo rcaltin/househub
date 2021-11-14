@@ -40,11 +40,13 @@ int App::exec(int argc, char *argv[]) {
   }
 
   // init file-manager
-  if (!FileManager::instance().init(
-          ini.Get("file_manager", "record_dir", "./rec/"),
-          ini.GetInteger("file_manager", "record_dir_size_limit_mb", 8192))) {
-    std::cout << "file directory r/w error: "
-              << FileManager::instance().getRecordingDir() << std::endl;
+  FileManagerParams fmp;
+  fmp.recordDir = ini.Get("file_manager", "record_dir", "./rec/");
+  fmp.recordDirSizeLimitMB =
+      ini.GetInteger("file_manager", "record_dir_size_limit_mb", 8192);
+  fmp.useLocalTime = ini.GetBoolean("file_manager", "use_localtime", false);
+  if (!FileManager::instance().init(fmp)) {
+    std::cout << "file directory r/w error: " << fmp.recordDir << std::endl;
     return -2;
   }
 
@@ -59,28 +61,59 @@ int App::exec(int argc, char *argv[]) {
   // create capturers
   for (int i = 1; i <= capturerCount; ++i) {
     const std::string capN = "capturer" + std::to_string(i);
-    if (ini.Get(capN.c_str(), "name", "_X_X_X_") != "_X_X_X_") {
-      auto cap = CapturerFactory::createCapturer(
-          ini.Get(capN.c_str(), "name", capN.c_str()),
-          ini.Get(capN.c_str(), "type", "default"),
-          ini.Get(capN.c_str(), "stream_uri", "localhost/stream"),
-          ini.GetInteger(capN.c_str(), "output_fps", 10),
-          ini.GetInteger(capN.c_str(), "output_width", 1024),
-          ini.GetInteger(capN.c_str(), "output_height", 768),
-          ini.GetInteger(capN.c_str(), "filter_k", 0),
-          ini.GetInteger(capN.c_str(), "chunk_length_sec", 60),
-          ini.Get(capN.c_str(), "fourcc", "mjpg").c_str(),
-          ini.Get(capN.c_str(), "file_extension", ".avi"));
+    if (ini.Get(capN.c_str(), "name", "___N/A") != "___N/A") {
+      CapturerParams cp;
+      cp.name = ini.Get(capN.c_str(), "name", capN.c_str());
+      cp.type = ini.Get(capN.c_str(), "type", "default");
+      cp.streamUri = ini.Get(capN.c_str(), "stream_uri", "localhost/stream");
+      cp.filterK = ini.GetInteger(capN.c_str(), "filter_k", 0);
 
-      if (cap) {
-        mCapturers.push_back(std::move(cap));
-      } else {
+      cp.videoOutStreamParams.fps =
+          ini.GetInteger(capN.c_str(), "output_fps", 10);
+
+      cp.videoOutStreamParams.outputSize =
+          cv::Size(ini.GetInteger(capN.c_str(), "output_width", 1024),
+                   ini.GetInteger(capN.c_str(), "output_height", 768));
+
+      cp.videoOutStreamParams.chunkLengthSec =
+          ini.GetInteger(capN.c_str(), "chunk_length_sec", 60);
+
+      cp.videoOutStreamParams.fileExtension =
+          ini.Get(capN.c_str(), "file_extension", ".avi");
+
+      cp.videoOutStreamParams.watermark =
+          ini.GetBoolean(capN.c_str(), "watermark", true);
+
+      cp.videoOutStreamParams.useLocaltime =
+          ini.GetBoolean(capN.c_str(), "use_localtime", true);
+
+      const std::string fourcc = ini.Get(capN.c_str(), "fourcc", "mjpg");
+      if (fourcc.length() != 4) {
+        std::cout << "bad fourcc value." << std::endl;
+        return -4;
+      }
+      std::copy(fourcc.c_str(), fourcc.c_str() + 4,
+                cp.videoOutStreamParams.fourcc);
+
+      auto cap = CapturerFactory::createCapturer(cp);
+      if (!cap) {
         std::cout << "unknown capturer type." << std::endl;
         return -3;
       }
+
+      // init
+      if (cap->init(cp)) {
+        mCapturers.push_back(std::move(cap));
+        cap->startCapture();
+      } else {
+        std::cout << "capturer: " << cp.name
+                  << " initialization error. skipped." << std::endl;
+      }
     } else {
-      std::cout << capN << " expected but not found in the ini file. skipped."
-                << std::endl;
+      std::cout
+          << "capturer (" << capN
+          << ") expected but definition not found in the ini file. skipped."
+          << std::endl;
     }
   }
 
@@ -88,16 +121,6 @@ int App::exec(int argc, char *argv[]) {
   if (mCapturers.size() == 0) {
     std::cout << "no capturer loaded. check ini definitions." << std::endl;
     return -4;
-  }
-
-  // init capturers
-  for (auto &c : mCapturers) {
-    if (c->init()) {
-      c->startCapture();
-    } else {
-      std::cout << "capturer: " << c->getName() << " initialization error. "
-                << std::endl;
-    }
   }
 
   // main loop

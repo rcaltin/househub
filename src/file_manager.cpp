@@ -1,9 +1,10 @@
 #include "file_manager.h"
-#include <experimental/filesystem>
 #include <fstream>
 #include <list>
 #include <sstream>
 
+// TODO check compiler c++ version here to determine include experimental or not
+#include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 
 FileManager::FileManager() {}
@@ -19,22 +20,17 @@ FileManager &FileManager::instance() {
   return fm;
 }
 
-bool FileManager::init(const std::string &recordingDir,
-                       int directorySizeLimitMB) {
+bool FileManager::init(const FileManagerParams &params) {
   std::lock_guard<std::mutex> lock(mFileOrgMutex);
+  mParams = params;
 
-  mRecordingDir = recordingDir;
-  setDirectorySizeLimitMB(directorySizeLimitMB);
-
-  fs::create_directories(mRecordingDir);
-
-  std::ofstream f(mRecordingDir + ".init");
-  return f.is_open();
+  std::ofstream f(mParams.recordDir + ".init");
+  return fs::create_directories(mParams.recordDir) && f.is_open();
 }
 
 void FileManager::update(const uint64_t delta) {
 
-  if (mDirectorySizeLimitMB && !mFileOrgThread.joinable()) {
+  if (mParams.recordDirSizeLimitMB && !mFileOrgThread.joinable()) {
 
     mFileOrgThread = std::thread([this]() {
       std::lock_guard<std::mutex> lock(mFileOrgMutex);
@@ -43,7 +39,8 @@ void FileManager::update(const uint64_t delta) {
 
       int totalSizeMB = 0;
       std::list<FileRef> mFiles;
-      for (const auto &i : fs::recursive_directory_iterator(mRecordingDir)) {
+      for (const auto &i :
+           fs::recursive_directory_iterator(mParams.recordDir)) {
         if (!fs::is_directory(i.path())) {
           const auto &p = i.path();
 
@@ -59,12 +56,12 @@ void FileManager::update(const uint64_t delta) {
       }
 
       auto FileRefComp = [](const FileRef &a, const FileRef &b) {
-        // return a.time > b.time;
+        // TODO compare file creation time to sort instead file name
         return a.fileName > b.fileName;
       };
       mFiles.sort(FileRefComp);
 
-      while (totalSizeMB >= mDirectorySizeLimitMB) {
+      while (totalSizeMB >= mParams.recordDirSizeLimitMB) {
 
         const FileRef &f = mFiles.back();
 
@@ -82,16 +79,6 @@ void FileManager::update(const uint64_t delta) {
   }
 }
 
-std::string FileManager::getRecordingDir() const { return mRecordingDir; }
-
-int FileManager::getDirectorySizeLimitMB() const {
-  return mDirectorySizeLimitMB;
-}
-
-void FileManager::setDirectorySizeLimitMB(int directorySizeLimitMB) {
-  mDirectorySizeLimitMB = directorySizeLimitMB;
-}
-
 std::string FileManager::generateRecordFile(const std::string &capturerName,
                                             const std::string &fileExtension,
                                             time_t t) const {
@@ -100,9 +87,9 @@ std::string FileManager::generateRecordFile(const std::string &capturerName,
   }
 
   std::stringstream path;
-  path << mRecordingDir << capturerName << "/";
+  path << mParams.recordDir << capturerName << "/";
 
   fs::create_directories(path.str());
-  path << timeString(t, false) << fileExtension;
+  path << timeString(t, mParams.useLocalTime) << fileExtension;
   return path.str();
 }
