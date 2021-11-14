@@ -60,12 +60,14 @@ IF (WIN32)
         DESTINATION ${PROJECT_NAME} 
     )
 
-    # install resources
+    # install ini
     install(
         FILES
         ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.ini 
         DESTINATION ${PROJECT_NAME}
     )
+
+    # TODO: install service
 ELSE()
     # install targets
     install(
@@ -74,10 +76,17 @@ ELSE()
         RUNTIME DESTINATION bin
     )
 
-    # install resources
+    # install ini
     install(
         FILES
         ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.ini 
         DESTINATION /etc/${PROJECT_NAME}
+    )
+
+    # install service
+    install(
+        FILES
+        ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.service
+        DESTINATION /etc/systemd/system/
     )
 ENDIF()
