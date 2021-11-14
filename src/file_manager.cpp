@@ -24,8 +24,12 @@ bool FileManager::init(const FileManagerParams &params) {
   std::lock_guard<std::mutex> lock(mFileOrgMutex);
   mParams = params;
 
+  // create dir if not exist
+  fs::create_directories(mParams.recordDir);
+
+  // trial file
   std::ofstream f(mParams.recordDir + ".init");
-  return fs::create_directories(mParams.recordDir) && f.is_open();
+  return f.is_open();
 }
 
 void FileManager::update(const uint64_t delta) {
@@ -87,9 +91,11 @@ std::string FileManager::generateRecordFile(const std::string &capturerName,
   }
 
   std::stringstream path;
-  path << mParams.recordDir << capturerName << "/";
+  path << mParams.recordDir << "/" << capturerName << "/";
 
   fs::create_directories(path.str());
+
   path << timeString(t, mParams.useLocalTime) << fileExtension;
+
   return path.str();
 }

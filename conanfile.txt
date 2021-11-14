@@ -4,7 +4,8 @@ opencv/4.5.3
 [options]
 opencv:contrib=False
 opencv:with_ffmpeg=True
-#ffmpeg:with_pulse=False
+ffmpeg:with_pulse=False 
+# pulseaudio has build problems on raspberry pi-4, so disabled
 
 [generators]
 cmake

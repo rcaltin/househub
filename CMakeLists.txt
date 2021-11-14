@@ -51,3 +51,33 @@ target_link_libraries(${PROJECT_NAME}
     stdc++fs
     CONAN_PKG::opencv
 )
+
+IF (WIN32)
+    # install targets
+    install(
+        TARGETS 
+        ${PROJECT_NAME} 
+        DESTINATION ${PROJECT_NAME} 
+    )
+
+    # install resources
+    install(
+        FILES
+        ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.ini 
+        DESTINATION ${PROJECT_NAME}
+    )
+ELSE()
+    # install targets
+    install(
+        TARGETS 
+        ${PROJECT_NAME} 
+        RUNTIME DESTINATION bin
+    )
+
+    # install resources
+    install(
+        FILES
+        ${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.ini 
+        DESTINATION /etc/${PROJECT_NAME}
+    )
+ENDIF()
