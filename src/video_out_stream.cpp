@@ -1,24 +1,21 @@
 #include "video_out_stream.h"
 #include "file_manager.h"
 
-VideoOutStream::VideoOutStream(const std::string &name, uint32_t fps,
-                               const cv::Size &outputSize,
-                               uint32_t chunkLengthSec, const char *fourcc,
-                               const std::string &fileExtension)
-    : mName(name), mFps(fps), mOutputSize(outputSize),
-      mChunkLengthSec(chunkLengthSec), mFileExtension(fileExtension) {
-  setFourcc(fourcc);
-}
+VideoOutStream::VideoOutStream() {}
 
 VideoOutStream::~VideoOutStream() { releaseChunk(); }
 
-bool VideoOutStream::init() { return beginChunk(); }
+bool VideoOutStream::init(const VideoOutStreamParams &params) {
+  mParams = params;
+  return beginChunk();
+}
 
 void VideoOutStream::update(const uint64_t delta) {
-  time_t t = std::time(nullptr);
+  const time_t t = std::time(nullptr);
 
   if (mVideoWriter && t - mLastWriteTime > 0) {
     std::unique_lock<std::mutex> lock(mFrameQueueMutex);
+    const int fps = mParams.fps;
 
     // move frames to the buffer
     std::list<VideoFrame> buffer;
@@ -32,14 +29,14 @@ void VideoOutStream::update(const uint64_t delta) {
     if (buffer.empty()) {
       VideoFrame vf;
       vf.time = t;
-      cv::Mat f(mOutputSize, CV_8UC3, cv::Scalar(0, 0, 0));
-      timeStampAndResizeFrame(f, vf.frame, t);
+      cv::Mat f(mParams.outputSize, CV_8UC3, cv::Scalar(0, 0, 0));
+      resizeAndWatermarkFrame(f, vf.frame, t);
       buffer.emplace_front(std::move(vf));
     }
 
     // extend buffer if frame count less than fps
-    while (buffer.size() < mFps) {
-      for (auto it = buffer.begin(); it != buffer.end() && buffer.size() < mFps;
+    while (buffer.size() < fps) {
+      for (auto it = buffer.begin(); it != buffer.end() && buffer.size() < fps;
            ++it) {
         it = buffer.insert(it, *it);
         ++it;
@@ -47,7 +44,7 @@ void VideoOutStream::update(const uint64_t delta) {
     }
 
     // shrink buffer if frame count more than fps
-    while (buffer.size() > mFps) {
+    while (buffer.size() > fps) {
       buffer.pop_back();
     }
 
@@ -58,9 +55,9 @@ void VideoOutStream::update(const uint64_t delta) {
     }
 
     // switch to a new chunk if current chunk complete
-    mWrittenFramesCount += mFps;
-    if (mChunkLengthSec > 0 &&
-        mWrittenFramesCount >= (mChunkLengthSec * mFps)) {
+    mWrittenFramesCount += fps;
+    if (mParams.chunkLengthSec > 0 &&
+        mWrittenFramesCount >= (mParams.chunkLengthSec * fps)) {
       beginChunk();
     }
 
@@ -72,65 +69,37 @@ void VideoOutStream::pushFrame(cv::Mat &&frame, time_t t) {
   VideoFrame vf;
   vf.time = t != 0 ? t : std::time(nullptr);
 
-  timeStampAndResizeFrame(frame, vf.frame, vf.time);
+  resizeAndWatermarkFrame(frame, vf.frame, vf.time);
 
   // enqueue
   std::unique_lock<std::mutex> lock(mFrameQueueMutex);
   mFrameQueue.emplace(std::move(vf));
 }
 
-std::string VideoOutStream::getName() const { return mName; }
+VideoOutStreamParams &VideoOutStream::params() { return mParams; }
 
-void VideoOutStream::setName(const std::string &name) { mName = name; }
-
-uint32_t VideoOutStream::getFps() const { return mFps; }
-
-void VideoOutStream::setFps(uint32_t fps) { mFps = fps; }
-
-cv::Size VideoOutStream::getOutputSize() const { return mOutputSize; }
-
-void VideoOutStream::setOutputSize(const cv::Size &outputSize) {
-  mOutputSize = outputSize;
-}
-
-uint32_t VideoOutStream::getChunkLengthSec() const { return mChunkLengthSec; }
-
-void VideoOutStream::setChunkLengthSec(uint32_t chunkLengthSec) {
-  mChunkLengthSec = chunkLengthSec;
-}
-
-const char *VideoOutStream::getFourcc() const { return mFourcc; }
-
-void VideoOutStream::setFourcc(const char *fourcc) {
-  if (sizeof(fourcc) >= sizeof(mFourcc)) {
-    std::copy(fourcc, fourcc + 4, mFourcc);
-  }
-}
-
-std::string VideoOutStream::getFileExtension() const { return mFileExtension; }
-
-void VideoOutStream::setFileExtension(const std::string &fileExtension) {
-  mFileExtension = fileExtension;
-}
-
-void VideoOutStream::timeStampAndResizeFrame(cv::Mat &frameIn,
+void VideoOutStream::resizeAndWatermarkFrame(cv::Mat &frameIn,
                                              cv::Mat &frameOut, time_t t) {
   if (!t) {
     t = std::time(nullptr);
   }
 
   // resize
-  cv::resize(frameIn, frameOut, mOutputSize);
+  cv::resize(frameIn, frameOut, mParams.outputSize);
 
-  std::string label = timeString(t) + " " + mName;
+  // watermark
+  if (mParams.watermark) {
+    std::string label =
+        timeString(t, mParams.useLocaltime) + " " + mParams.name;
 
-  // grey wide label as border
-  cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN, 1.5f,
-              cv::Scalar(128, 128, 128, 128), 3, false);
+    // grey wide label as border
+    cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN,
+                1.5f, cv::Scalar(128, 128, 128, 128), 3, false);
 
-  // white narrow label as body
-  cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN, 1.5f,
-              cv::Scalar(255, 255, 255, 128), 1, false);
+    // white narrow label as body
+    cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN,
+                1.5f, cv::Scalar(255, 255, 255, 128), 1, false);
+  }
 }
 
 bool VideoOutStream::beginChunk() {
@@ -141,11 +110,14 @@ bool VideoOutStream::beginChunk() {
   mVideoWriter.reset(new cv::VideoWriter());
 
   // create a new video file
-  const std::string &file =
-      FileManager::instance().generateRecordFile(mName, mFileExtension);
-  const int fourcc =
-      cv::VideoWriter::fourcc(mFourcc[0], mFourcc[1], mFourcc[2], mFourcc[3]);
-  if (!mVideoWriter->open(file, fourcc, mFps, mOutputSize, true)) {
+  const std::string &file = FileManager::instance().generateRecordFile(
+      mParams.name, mParams.fileExtension);
+
+  const auto fourccStr = mParams.fourcc;
+  const int fourcc = cv::VideoWriter::fourcc(fourccStr[0], fourccStr[1],
+                                             fourccStr[2], fourccStr[3]);
+  if (!mVideoWriter->open(file, fourcc, mParams.fps, mParams.outputSize,
+                          true)) {
     std::cout << "Error: creating video file failed." << std::endl;
     mVideoWriter.reset(nullptr);
     return false;
