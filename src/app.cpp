@@ -6,12 +6,9 @@
 #include <csignal>
 #include <iostream>
 
-static std::string usage = "usage:"
-                           "esp32cam-hub <name 1> <type 1> <uri 1> <name ...> "
-                           "<type ...> <uri ...> <name N> <type N> <uri N>";
-
 void signalHandler(int signum) {
-  std::cout << "\n\n!! INTERRUPTED !!\n\nTerminating..." << std::endl;
+  std::cout << "!! Signal " << signum << " received. Terminating... !!"
+            << std::endl;
 
   App::ExitFlag = true;
 }
@@ -21,13 +18,20 @@ bool App::ExitFlag = false;
 App::App() {
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
+  signal(SIGKILL, signalHandler);
 }
 
 App::~App() {}
 
 int App::exec(int argc, char *argv[]) {
 
-  std::string iniFile = "app.ini";
+  std::cout << "househub preparing... " << std::endl;
+
+#ifdef WIN32
+  std::string iniFile = "C:/househub.ini";
+#else
+  std::string iniFile = "/etc/househub/househub.ini";
+#endif
   if (argc == 2) {
     iniFile = argv[1];
   }
@@ -36,7 +40,7 @@ int App::exec(int argc, char *argv[]) {
   INIReader ini(iniFile);
   if (ini.ParseError() != 0) {
     std::cout << "ini file could not load: " << iniFile << std::endl;
-    return -1;
+    return ExitCode::INI_LOAD_ERROR;
   }
 
   // init file-manager
@@ -47,7 +51,7 @@ int App::exec(int argc, char *argv[]) {
   fmp.useLocalTime = ini.GetBoolean("file_manager", "use_localtime", false);
   if (!FileManager::instance().init(fmp)) {
     std::cout << "file directory r/w error: " << fmp.recordDir << std::endl;
-    return -2;
+    return ExitCode::RW_ERROR;
   }
 
   // pre-check capturer count
@@ -55,7 +59,7 @@ int App::exec(int argc, char *argv[]) {
       ini.GetInteger("app_settings", "capturer_count", -1);
   if (capturerCount <= 0) {
     std::cout << "invalid or not defined capturer count." << std::endl;
-    return -3;
+    return ExitCode::BAD_CAPTURER_COUNT;
   }
 
   // create capturers
@@ -67,6 +71,7 @@ int App::exec(int argc, char *argv[]) {
       cp.type = ini.Get(capN.c_str(), "type", "default");
       cp.streamUri = ini.Get(capN.c_str(), "stream_uri", "localhost/stream");
       cp.filterK = ini.GetInteger(capN.c_str(), "filter_k", 0);
+      cp.videoOutStreamParams.name = cp.name;
 
       cp.videoOutStreamParams.fps =
           ini.GetInteger(capN.c_str(), "output_fps", 10);
@@ -90,21 +95,21 @@ int App::exec(int argc, char *argv[]) {
       const std::string fourcc = ini.Get(capN.c_str(), "fourcc", "mjpg");
       if (fourcc.length() != 4) {
         std::cout << "bad fourcc value." << std::endl;
-        return -4;
+        return ExitCode::BAD_FOURCC;
       }
       std::copy(fourcc.c_str(), fourcc.c_str() + 4,
                 cp.videoOutStreamParams.fourcc);
 
       auto cap = CapturerFactory::createCapturer(cp);
       if (!cap) {
-        std::cout << "unknown capturer type." << std::endl;
-        return -3;
+        std::cout << "unknown capturer type: " << cp.type << std::endl;
+        return ExitCode::UNKNOWN_CAPTURER_TYPE;
       }
 
       // init
       if (cap->init(cp)) {
-        mCapturers.push_back(std::move(cap));
         cap->startCapture();
+        mCapturers.push_back(std::move(cap));
       } else {
         std::cout << "capturer: " << cp.name
                   << " initialization error. skipped." << std::endl;
@@ -120,8 +125,10 @@ int App::exec(int argc, char *argv[]) {
   // post-check capturer count
   if (mCapturers.size() == 0) {
     std::cout << "no capturer loaded. check ini definitions." << std::endl;
-    return -4;
+    return ExitCode::NO_CAPTURER;
   }
+
+  std::cout << "househub started." << std::endl;
 
   // main loop
   int i = 0;
@@ -136,5 +143,5 @@ int App::exec(int argc, char *argv[]) {
     FileManager::instance().update(delta);
   }
 
-  return 0;
+  return ExitCode::NORMAL_EXIT;
 }
