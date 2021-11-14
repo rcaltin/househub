@@ -1,0 +1,9 @@
+[Unit]
+Description=househub service            
+
+[Service]
+Type=simple            
+ExecStart=househub            
+
+[Install]
+WantedBy=multi-user.target
