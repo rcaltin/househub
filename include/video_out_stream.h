@@ -48,4 +48,5 @@ private:
   std::unique_ptr<cv::VideoWriter> mVideoWriter;
   std::queue<VideoFrame> mFrameQueue;
   std::mutex mFrameQueueMutex;
+  std::string mCurrentVideoFile;
 };

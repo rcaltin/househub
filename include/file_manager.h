@@ -30,6 +30,7 @@ public:
 
   std::string generateRecordFile(const std::string &capturerName,
                                  const std::string &fileExtension,
+                                 uint32_t chunkLengthSec,
                                  time_t t = 0) const;
 
 private:
