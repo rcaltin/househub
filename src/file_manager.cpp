@@ -1,4 +1,5 @@
 #include "file_manager.h"
+#include <chrono>
 #include <fstream>
 #include <list>
 #include <sstream>
@@ -85,17 +86,24 @@ void FileManager::update(const uint64_t delta) {
 
 std::string FileManager::generateRecordFile(const std::string &capturerName,
                                             const std::string &fileExtension,
+                                            uint32_t chunkLengthSec,
                                             time_t t) const {
-  if (!t) {
-    t = std::time(nullptr);
-  }
+  auto tStart = t ? std::chrono::system_clock::from_time_t(t)
+                  : std::chrono::system_clock::now();
+  auto tEnd = tStart + std::chrono::seconds(chunkLengthSec);
 
   std::stringstream path;
   path << mParams.recordDir << "/" << capturerName << "/";
 
   fs::create_directories(path.str());
 
-  path << timeString(t, mParams.useLocalTime) << fileExtension;
+  path << capturerName << "#"
+       << timeString(std::chrono::system_clock::to_time_t(tStart),
+                     mParams.useLocalTime)
+       << "#"
+       << timeString(std::chrono::system_clock::to_time_t(tEnd),
+                     mParams.useLocalTime)
+       << fileExtension;
 
   return path.str();
 }
