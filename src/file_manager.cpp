@@ -46,9 +46,8 @@ void FileManager::update(const uint64_t delta) {
       std::list<FileRef> mFiles;
       for (const auto &i :
            fs::recursive_directory_iterator(mParams.recordDir)) {
-        if (!fs::is_directory(i.path())) {
-          const auto &p = i.path();
-
+        const auto &p = i.path();
+        if (!fs::is_directory(p) && p.has_extension()) {
           FileRef ref;
           ref.path = p;
           ref.fileName = p.filename();
@@ -60,9 +59,22 @@ void FileManager::update(const uint64_t delta) {
         }
       }
 
-      auto FileRefComp = [](const FileRef &a, const FileRef &b) {
-        // TODO compare file creation time to sort instead file name
-        return a.fileName > b.fileName;
+      auto FileRefComp = [](const FileRef &l, const FileRef &r) {
+        const Strings &stringsL = split(l.fileName, FILENAME_DELIMITIER);
+        const Strings &stringsR = split(r.fileName, FILENAME_DELIMITIER);
+
+        const bool isVidL = stringsL.size() == 3;
+        const bool isVidR = stringsR.size() == 3;
+        if (isVidL && isVidR) {
+          // both sides are video records
+          return stringTime(stringsL.at(1)) > stringTime(stringsR.at(1));
+        } else if (isVidL || isVidR) {
+          // one side is video record
+          return isVidR;
+        } else {
+          // both sides are not video record
+          return l.fileName > r.fileName;
+        }
       };
       mFiles.sort(FileRefComp);
 
@@ -97,10 +109,10 @@ std::string FileManager::generateRecordFile(const std::string &capturerName,
 
   fs::create_directories(path.str());
 
-  path << capturerName << "#"
+  path << capturerName << FILENAME_DELIMITIER
        << timeString(std::chrono::system_clock::to_time_t(tStart),
                      mParams.useLocalTime)
-       << "#"
+       << FILENAME_DELIMITIER
        << timeString(std::chrono::system_clock::to_time_t(tEnd),
                      mParams.useLocalTime)
        << fileExtension;

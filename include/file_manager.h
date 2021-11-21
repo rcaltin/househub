@@ -17,6 +17,8 @@ struct FileManagerParams {
   bool useLocalTime{false};
 };
 
+constexpr char FILENAME_DELIMITIER = '#';
+
 class FileManager {
 public:
   ~FileManager();
