@@ -32,13 +32,15 @@ public:
 
   std::string generateRecordFile(const std::string &capturerName,
                                  const std::string &fileExtension,
-                                 uint32_t chunkLengthSec,
-                                 time_t t = 0) const;
+                                 uint32_t chunkLengthSec, time_t t = 0) const;
 
 private:
-  FileManager();
+  FileManager() = default;
+
   FileManager(const FileManager &) = delete;
+
   FileManager operator=(const FileManager &) = delete;
+
   FileManager operator=(const FileManager &&) = delete;
 
   FileManagerParams mParams;

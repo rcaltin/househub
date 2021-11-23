@@ -1,14 +1,13 @@
 #include "app.h"
-#include "INIReader.h"
 #include "capturer_factory.h"
+#include "config_manager.h"
 #include "file_manager.h"
+#include "file_system.h"
 #include "globals.h"
 #include <csignal>
-#include <iostream>
 
 void signalHandler(int signum) {
-  std::cout << "!! Signal " << signum << " received. Terminating... !!"
-            << std::endl;
+  LOG(INFO) << "!! Signal " << signum << " received. Terminating... !!";
 
   App::ExitFlag = true;
 }
@@ -24,8 +23,10 @@ App::App() {
 App::~App() {}
 
 int App::exec(int argc, char *argv[]) {
+  google::InitGoogleLogging(argv[0]);
+  google::SetStderrLogging(google::GLOG_INFO);
 
-  std::cout << "househub preparing... " << std::endl;
+  LOG(INFO) << "househub preparing... ";
 
 #ifdef WIN32
   std::string iniFile = "C:/househub.ini";
@@ -36,65 +37,86 @@ int App::exec(int argc, char *argv[]) {
     iniFile = argv[1];
   }
 
-  // read ini
-  INIReader ini(iniFile);
-  if (ini.ParseError() != 0) {
-    std::cout << "ini file could not load: " << iniFile << std::endl;
-    return ExitCode::INI_LOAD_ERROR;
+  // init config-manager
+  ConfigManager &cm = ConfigManager::instance();
+  if (!cm.init(iniFile)) {
+    LOG(FATAL) << "bad ini format: " << iniFile;
+    return ExitCode::BAD_INI_FORMAT;
   }
+
+  // ini version check
+  if (cm.getInt("app_settings", "ini_version") < REQUIRED_INI_VERSION) {
+    LOG(FATAL) << "bad ini version: " << iniFile;
+    return ExitCode::BAD_INI_VERSION;
+  }
+
+  // create log dir
+  const std::string logDir =
+      cm.getString("app_settings", "log_dir", "./househub-logs/");
+  if (!fs::exists(logDir) && !fs::create_directories(logDir)) {
+    LOG(ERROR) << "log directory could not created: " << logDir;
+  } else {
+    for (int severity = 0; severity < google::NUM_SEVERITIES; ++severity) {
+      google::SetLogDestination(severity, logDir.c_str());
+      google::SetLogSymlink(severity, "");
+    }
+  }
+
+  // set log overdue days
+  google::EnableLogCleaner(cm.getInt("app_settings", "log_overdue_days", 30));
 
   // init file-manager
   FileManagerParams fmp;
-  fmp.recordDir = ini.Get("file_manager", "record_dir", "./rec/");
+  fmp.recordDir =
+      cm.getString("file_manager", "record_dir", "./househub-records/");
   fmp.recordDirSizeLimitMB =
-      ini.GetInteger("file_manager", "record_dir_size_limit_mb", 8192);
-  fmp.useLocalTime = ini.GetBoolean("file_manager", "use_localtime", false);
+      cm.getInt("file_manager", "record_dir_size_limit_mb", 8192);
+  fmp.useLocalTime = cm.getBool("file_manager", "use_localtime", false);
   if (!FileManager::instance().init(fmp)) {
-    std::cout << "file directory r/w error: " << fmp.recordDir << std::endl;
+    LOG(FATAL) << "file directory r/w error: " << fmp.recordDir;
     return ExitCode::RW_ERROR;
   }
 
   // pre-check capturer count
-  const int capturerCount =
-      ini.GetInteger("app_settings", "capturer_count", -1);
+  const int capturerCount = cm.getInt("app_settings", "capturer_count", -1);
   if (capturerCount <= 0) {
-    std::cout << "invalid or not defined capturer count." << std::endl;
+    LOG(FATAL) << "invalid or not defined capturer count.";
     return ExitCode::BAD_CAPTURER_COUNT;
   }
 
   // create capturers
   for (int i = 1; i <= capturerCount; ++i) {
     const std::string capN = "capturer" + std::to_string(i);
-    if (ini.Get(capN.c_str(), "name", "___N/A") != "___N/A") {
+    if (cm.getString(capN.c_str(), "name", "___N/A") != "___N/A") {
       CapturerParams cp;
-      cp.name = ini.Get(capN.c_str(), "name", capN.c_str());
-      cp.type = ini.Get(capN.c_str(), "type", "default");
-      cp.streamUri = ini.Get(capN.c_str(), "stream_uri", "localhost/stream");
-      cp.filterK = ini.GetInteger(capN.c_str(), "filter_k", 0);
+      cp.name = cm.getString(capN.c_str(), "name", capN.c_str());
+      cp.type = cm.getString(capN.c_str(), "type", "default");
+      cp.streamUri =
+          cm.getString(capN.c_str(), "stream_uri", "localhost/stream");
+      cp.filterK = cm.getInt(capN.c_str(), "filter_k", 0);
       cp.videoOutStreamParams.name = cp.name;
 
-      cp.videoOutStreamParams.fps =
-          ini.GetInteger(capN.c_str(), "output_fps", 10);
+      cp.videoOutStreamParams.fps = cm.getInt(capN.c_str(), "output_fps", 10);
 
       cp.videoOutStreamParams.outputSize =
-          cv::Size(ini.GetInteger(capN.c_str(), "output_width", 1024),
-                   ini.GetInteger(capN.c_str(), "output_height", 768));
+          cv::Size(cm.getInt(capN.c_str(), "output_width", 1024),
+                   cm.getInt(capN.c_str(), "output_height", 768));
 
       cp.videoOutStreamParams.chunkLengthSec =
-          ini.GetInteger(capN.c_str(), "chunk_length_sec", 60);
+          cm.getInt(capN.c_str(), "chunk_length_sec", 60);
 
       cp.videoOutStreamParams.fileExtension =
-          ini.Get(capN.c_str(), "file_extension", ".avi");
+          cm.getString(capN.c_str(), "file_extension", ".avi");
 
       cp.videoOutStreamParams.watermark =
-          ini.GetBoolean(capN.c_str(), "watermark", true);
+          cm.getBool(capN.c_str(), "watermark", true);
 
       cp.videoOutStreamParams.useLocaltime =
-          ini.GetBoolean(capN.c_str(), "use_localtime", true);
+          cm.getBool(capN.c_str(), "use_localtime", true);
 
-      const std::string fourcc = ini.Get(capN.c_str(), "fourcc", "mjpg");
+      const std::string fourcc = cm.getString(capN.c_str(), "fourcc", "mjpg");
       if (fourcc.length() != 4) {
-        std::cout << "bad fourcc value." << std::endl;
+        LOG(FATAL) << "bad fourcc value.";
         return ExitCode::BAD_FOURCC;
       }
       std::copy(fourcc.c_str(), fourcc.c_str() + 4,
@@ -102,8 +124,8 @@ int App::exec(int argc, char *argv[]) {
 
       auto cap = CapturerFactory::createCapturer(cp);
       if (!cap) {
-        std::cout << "unknown capturer type: " << cp.type << std::endl;
-        return ExitCode::UNKNOWN_CAPTURER_TYPE;
+        LOG(FATAL) << "bad capturer type: " << cp.type;
+        return ExitCode::BAD_CAPTURER_TYPE;
       }
 
       // init
@@ -111,24 +133,23 @@ int App::exec(int argc, char *argv[]) {
         cap->startCapture();
         mCapturers.push_back(std::move(cap));
       } else {
-        std::cout << "capturer: " << cp.name
-                  << " initialization error. skipped." << std::endl;
+        LOG(ERROR) << "capturer: " << cp.name
+                   << " initialization error. skipped.";
       }
     } else {
-      std::cout
+      LOG(WARNING)
           << "capturer (" << capN
-          << ") expected but definition not found in the ini file. skipped."
-          << std::endl;
+          << ") expected but definition not found in the ini file. skipped.";
     }
   }
 
   // post-check capturer count
   if (mCapturers.size() == 0) {
-    std::cout << "no capturer loaded. check ini definitions." << std::endl;
+    LOG(FATAL) << "no capturer loaded. check ini definitions.";
     return ExitCode::NO_CAPTURER;
   }
 
-  std::cout << "househub started." << std::endl;
+  LOG(INFO) << "househub started.";
 
   // main loop
   int i = 0;
@@ -142,6 +163,8 @@ int App::exec(int argc, char *argv[]) {
 
     FileManager::instance().update(delta);
   }
+
+  LOG(INFO) << "househub stopped.";
 
   return ExitCode::NORMAL_EXIT;
 }

@@ -1,6 +1,5 @@
 #include "video_out_stream.h"
 #include "file_manager.h"
-#include <cstdio>
 
 VideoOutStream::VideoOutStream() {}
 
@@ -119,7 +118,7 @@ bool VideoOutStream::beginChunk() {
                                              fourccStr[2], fourccStr[3]);
   if (!mVideoWriter->open(mCurrentVideoFile, fourcc, mParams.fps,
                           mParams.outputSize, true)) {
-    std::cout << "Error: creating video file failed." << std::endl;
+    LOG(ERROR) << "video file creation failed: " << mCurrentVideoFile;
     mVideoWriter.reset(nullptr);
     return false;
   }
@@ -138,7 +137,7 @@ bool VideoOutStream::releaseChunk() {
   if (mWrittenFramesCount < mParams.chunkLengthSec * mParams.fps) {
     const uint32_t len =
         mParams.chunkLengthSec - (mWrittenFramesCount / mParams.fps);
-    const std::string& newFileName = FileManager::instance().generateRecordFile(
+    const std::string &newFileName = FileManager::instance().generateRecordFile(
         mParams.name, mParams.fileExtension, len, mLastWriteTime - len);
 
     rename(mCurrentVideoFile.c_str(), newFileName.c_str());

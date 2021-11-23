@@ -1,10 +1,24 @@
 #pragma once
 
-#include "opencv2/opencv.hpp"
 #include <chrono>
 #include <ctime>
+#include <glog/logging.h>
+#include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+
+#define REQUIRED_INI_VERSION 1
+
+enum ExitCode : int {
+  NORMAL_EXIT = 0,
+  BAD_INI_FORMAT = -1,
+  BAD_INI_VERSION = -2,
+  RW_ERROR = -3,
+  BAD_CAPTURER_COUNT = -4,
+  BAD_FOURCC = -5,
+  BAD_CAPTURER_TYPE = -6,
+  NO_CAPTURER = -6
+};
 
 static std::string timeString(time_t t, bool localTime = true) {
   if (t == 0) {
