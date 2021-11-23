@@ -1,14 +1,9 @@
 #include "file_manager.h"
+#include "file_system.h"
 #include <chrono>
 #include <fstream>
 #include <list>
 #include <sstream>
-
-// TODO check compiler c++ version here to determine include experimental or not
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-
-FileManager::FileManager() {}
 
 FileManager::~FileManager() {
   if (mFileOrgThread.joinable()) {
@@ -29,7 +24,7 @@ bool FileManager::init(const FileManagerParams &params) {
   fs::create_directories(mParams.recordDir);
 
   // trial file
-  std::ofstream f(mParams.recordDir + ".init");
+  std::ofstream f(mParams.recordDir + "init");
   return f.is_open();
 }
 
@@ -78,12 +73,13 @@ void FileManager::update(const uint64_t delta) {
       };
       mFiles.sort(FileRefComp);
 
-      while (totalSizeMB >= mParams.recordDirSizeLimitMB) {
+      while (!mFiles.empty() && totalSizeMB >= mParams.recordDirSizeLimitMB) {
 
         const FileRef &f = mFiles.back();
 
         if (fs::remove(f.path)) {
           totalSizeMB -= f.sizeMB;
+          LOG(INFO) << "chunk removed due to file size limit: " << f.path;
         }
 
         mFiles.pop_back();

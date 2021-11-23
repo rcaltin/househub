@@ -26,5 +26,7 @@ public:
 
   virtual bool isCapturing() const = 0;
 
+  virtual bool isStreamHealthy() const = 0;
+
   virtual CapturerParams &params() = 0;
 };

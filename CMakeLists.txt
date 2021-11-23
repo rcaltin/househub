@@ -21,7 +21,6 @@ conan_cmake_run(CONANFILE conanfile.txt BASIC_SETUP BUILD missing CMAKE_TARGETS)
 # project includes
 include_directories(
     include
-    thirdParty/inih/include
 )
 
 # project sources
@@ -30,6 +29,7 @@ set(SOURCES
     src/app.cpp
     src/capturer.cpp
     src/capturer_factory.cpp
+    src/config_manager.cpp
     src/file_manager.cpp
 	src/video_out_stream.cpp
 )
@@ -50,6 +50,8 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
     stdc++fs
     CONAN_PKG::opencv
+    CONAN_PKG::glog
+    CONAN_PKG::inih
 )
 
 IF (WIN32)

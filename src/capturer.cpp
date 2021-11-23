@@ -35,11 +35,21 @@ bool Capturer::init(const CapturerParams &params) {
         }
 
         mOutStream->pushFrame(std::move(mLastGrabedFrame));
+
+        if (!mStreamHealthy) {
+          mStreamHealthy = true;
+          LOG(INFO) << "capturer in-stream is up: " << mParams.name;
+        }
       }
 
-      // connection drop check
+      // stream health check
       if (t - mLastGrabTime > 1) {
         mVideoCapture.reset(new cv::VideoCapture(mParams.streamUri));
+
+        if (mStreamHealthy) {
+          mStreamHealthy = false;
+          LOG(WARNING) << "capturer in-stream is down: " << mParams.name;
+        }
       }
     }
   });
@@ -49,10 +59,18 @@ bool Capturer::init(const CapturerParams &params) {
 
 void Capturer::update(const uint64_t delta) { mOutStream->update(delta); }
 
-void Capturer::startCapture() { mCapturing = true; }
+void Capturer::startCapture() {
+  mCapturing = true;
+  LOG(INFO) << "capturer started: " << mParams.name;
+}
 
-void Capturer::stopCapture() { mCapturing = false; }
+void Capturer::stopCapture() {
+  mCapturing = false;
+  LOG(INFO) << "capturer stopped: " << mParams.name;
+}
 
 bool Capturer::isCapturing() const { return mCapturing; }
+
+bool Capturer::isStreamHealthy() const { return mStreamHealthy; }
 
 CapturerParams &Capturer::params() { return mParams; }

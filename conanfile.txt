@@ -1,11 +1,12 @@
 [requires]
 opencv/4.5.3
+glog/0.5.0
+inih/52
 
 [options]
 opencv:contrib=False
 opencv:with_ffmpeg=True
-ffmpeg:with_pulse=False 
-# pulseaudio has build problems on raspberry pi-4, so disabled
+ffmpeg:with_pulse=False # pulseaudio has build problems on raspberry pi-4, so disabled
 
 [generators]
 cmake
