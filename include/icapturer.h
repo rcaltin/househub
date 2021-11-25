@@ -18,8 +18,6 @@ public:
 
   virtual bool init(const CapturerParams &params) = 0;
 
-  virtual void update(const uint64_t delta) = 0;
-
   virtual void startCapture() = 0;
 
   virtual void stopCapture() = 0;

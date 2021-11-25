@@ -22,7 +22,7 @@ bool Capturer::init(const CapturerParams &params) {
 
     while (!mExitFlag) {
 
-      time_t t = std::time(nullptr);
+      const time_t t = std::time(nullptr);
 
       if (mCapturing && mVideoCapture->isOpened() && mVideoCapture->grab() &&
           mVideoCapture->retrieve(mLastGrabedFrame)) {
@@ -34,7 +34,7 @@ bool Capturer::init(const CapturerParams &params) {
                                              : mParams.filterK + 1);
         }
 
-        mOutStream->pushFrame(std::move(mLastGrabedFrame));
+        mOutStream->feed(std::move(mLastGrabedFrame), t);
 
         if (!mStreamHealthy) {
           mStreamHealthy = true;
@@ -51,13 +51,13 @@ bool Capturer::init(const CapturerParams &params) {
           LOG(WARNING) << "capturer in-stream is down: " << mParams.name;
         }
       }
+
+      mOutStream->update();
     }
   });
 
   return true;
 }
-
-void Capturer::update(const uint64_t delta) { mOutStream->update(delta); }
 
 void Capturer::startCapture() {
   mCapturing = true;

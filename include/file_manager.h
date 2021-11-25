@@ -1,8 +1,6 @@
 #pragma once
 
 #include "globals.h"
-#include <atomic>
-#include <mutex>
 #include <thread>
 
 struct FileRef {
@@ -14,6 +12,7 @@ struct FileRef {
 struct FileManagerParams {
   std::string recordDir;
   int recordDirSizeLimitMB{0};
+  int recordDirSizeCheckIntervalSec{0};
   bool useLocalTime{false};
 };
 
@@ -22,6 +21,7 @@ constexpr char FILENAME_DELIMITIER = '#';
 class FileManager {
 public:
   ~FileManager();
+  
   static FileManager &instance();
 
   bool init(const FileManagerParams &params);
@@ -44,7 +44,7 @@ private:
   FileManager operator=(const FileManager &&) = delete;
 
   FileManagerParams mParams;
-  std::thread mFileOrgThread;
-  std::mutex mFileOrgMutex;
-  std::atomic_bool mFileOrgFree = false;
+  bool mExitFlag = false;
+  std::thread mGarbageCollectorThread;
+  time_t mLastCheckTime = 0;
 };

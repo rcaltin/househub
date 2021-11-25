@@ -71,6 +71,8 @@ int App::exec(int argc, char *argv[]) {
       cm.getString("file_manager", "record_dir", "./househub-records/");
   fmp.recordDirSizeLimitMB =
       cm.getInt("file_manager", "record_dir_size_limit_mb", 8192);
+  fmp.recordDirSizeCheckIntervalSec =
+      cm.getInt("file_manager", "record_dir_size_check_interval_sec", 10);
   fmp.useLocalTime = cm.getBool("file_manager", "use_localtime", false);
   if (!FileManager::instance().init(fmp)) {
     LOG(FATAL) << "file directory r/w error: " << fmp.recordDir;
@@ -104,6 +106,9 @@ int App::exec(int argc, char *argv[]) {
 
       cp.videoOutStreamParams.chunkLengthSec =
           cm.getInt(capN.c_str(), "chunk_length_sec", 60);
+
+      cp.videoOutStreamParams.uniformChunks =
+          cm.getBool(capN.c_str(), "uniform_chunks", true);
 
       cp.videoOutStreamParams.fileExtension =
           cm.getString(capN.c_str(), "file_extension", ".avi");
@@ -152,16 +157,10 @@ int App::exec(int argc, char *argv[]) {
   LOG(INFO) << "househub started.";
 
   // main loop
-  int i = 0;
-  uint64_t tLast = timeSinceEpochMs();
+  using namespace std::chrono_literals;
   while (!ExitFlag) {
-    const uint64_t delta = (timeSinceEpochMs() - tLast);
-
-    for (auto &c : mCapturers) {
-      c->update(delta);
-    }
-
-    FileManager::instance().update(delta);
+    // TODO command line interface
+    std::this_thread::sleep_for(100ms);
   }
 
   LOG(INFO) << "househub stopped.";

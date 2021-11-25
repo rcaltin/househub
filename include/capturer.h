@@ -13,8 +13,6 @@ public:
 
   bool init(const CapturerParams &params) override;
 
-  void update(const uint64_t delta) override;
-
   void startCapture() override;
 
   void stopCapture() override;
