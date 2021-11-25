@@ -57,6 +57,8 @@ void VideoOutStream::update() {
     buffer.pop_back();
   }
 
+  mLastWriteTime = t;
+
   // switch to a new chunk if current chunk complete
   mWrittenFramesCount += fps;
   const bool newChunk =
@@ -66,8 +68,6 @@ void VideoOutStream::update() {
   if (mParams.chunkLengthSec > 0 && newChunk) {
     beginChunk(t);
   }
-
-  mLastWriteTime = t;
 }
 
 void VideoOutStream::feed(cv::Mat &&frame, time_t t) {
@@ -124,7 +124,7 @@ bool VideoOutStream::beginChunk(time_t t) {
           ? (mParams.chunkLengthSec - (t % mParams.chunkLengthSec))
           : mParams.chunkLengthSec;
   mCurrentVideoFile = FileManager::instance().generateRecordFile(
-      mParams.name, mParams.fileExtension, mParams.chunkLengthSec);
+      mParams.name, mParams.fileExtension, len, t);
 
   const auto fourccStr = mParams.fourcc;
   const int fourcc = cv::VideoWriter::fourcc(fourccStr[0], fourccStr[1],
@@ -148,8 +148,7 @@ bool VideoOutStream::releaseChunk() {
 
   // rename the file if incomplete
   if (mWrittenFramesCount < mParams.chunkLengthSec * mParams.fps) {
-    const uint32_t len =
-        mParams.chunkLengthSec - (mWrittenFramesCount / mParams.fps);
+    const uint32_t len = mWrittenFramesCount / mParams.fps;
     const std::string &newFileName = FileManager::instance().generateRecordFile(
         mParams.name, mParams.fileExtension, len, mLastWriteTime - len);
 
