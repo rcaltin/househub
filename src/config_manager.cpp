@@ -20,7 +20,8 @@ bool ConfigManager::getBool(const std::string &section, const std::string &key,
 
   if (!v.empty()) {
     std::transform(v.begin(), v.end(), v.begin(), ::tolower);
-    return v == "true" || v == "yes" || v == "on" || v == "1";
+    return v == "true" || v == "yes" || v == "on" || v == "1" ||
+           v == "enabled" || v == "active";
   }
 
   return defaultValue;

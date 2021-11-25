@@ -14,6 +14,7 @@ struct VideoOutStreamParams {
   uint32_t fps{10};
   cv::Size outputSize{1024, 768};
   uint32_t chunkLengthSec{300};
+  bool uniformChunks{true};
   char fourcc[4]{'m', 'j', 'p', 'g'};
   std::string fileExtension;
   bool watermark{true};
@@ -28,9 +29,9 @@ public:
 
   bool init(const VideoOutStreamParams &params);
 
-  void update(const uint64_t delta);
+  void update();
 
-  void pushFrame(cv::Mat &&frame, time_t t = 0);
+  void feed(cv::Mat &&frame, time_t t = 0);
 
   VideoOutStreamParams &params();
 
@@ -38,7 +39,7 @@ private:
   void resizeAndWatermarkFrame(cv::Mat &frameIn, cv::Mat &frameOut,
                                time_t t = 0);
 
-  bool beginChunk();
+  bool beginChunk(time_t t = 0);
 
   bool releaseChunk();
 

@@ -10,64 +10,69 @@ bool VideoOutStream::init(const VideoOutStreamParams &params) {
   return beginChunk();
 }
 
-void VideoOutStream::update(const uint64_t delta) {
+void VideoOutStream::update() {
   const time_t t = std::time(nullptr);
 
-  if (mVideoWriter && t - mLastWriteTime > 0) {
-    std::unique_lock<std::mutex> lock(mFrameQueueMutex);
-    const int fps = mParams.fps;
-
-    // move frames to the buffer
-    std::list<VideoFrame> buffer;
-    while (!mFrameQueue.empty() && mFrameQueue.front().time <= t) {
-      buffer.emplace_front(std::move(mFrameQueue.front()));
-      mFrameQueue.pop();
-    }
-    lock.unlock();
-
-    // push a blank frame if the queue empty
-    if (buffer.empty()) {
-      VideoFrame vf;
-      vf.time = t;
-      cv::Mat f(mParams.outputSize, CV_8UC3, cv::Scalar(0, 0, 0));
-      resizeAndWatermarkFrame(f, vf.frame, t);
-      buffer.emplace_front(std::move(vf));
-    }
-
-    // extend buffer if frame count less than fps
-    while (buffer.size() < fps) {
-      for (auto it = buffer.begin(); it != buffer.end() && buffer.size() < fps;
-           ++it) {
-        it = buffer.insert(it, *it);
-        ++it;
-      }
-    }
-
-    // shrink buffer if frame count more than fps
-    while (buffer.size() > fps) {
-      buffer.pop_back();
-    }
-
-    // flush buffer into video
-    while (!buffer.empty()) {
-      mVideoWriter->write(buffer.back().frame);
-      buffer.pop_back();
-    }
-
-    // switch to a new chunk if current chunk complete
-    mWrittenFramesCount += fps;
-    if (mParams.chunkLengthSec > 0 &&
-        mWrittenFramesCount >= (mParams.chunkLengthSec * fps)) {
-      beginChunk();
-    }
-
-    mLastWriteTime = t;
+  if (!mVideoWriter || t - mLastWriteTime == 0) {
+    return;
   }
+
+  std::unique_lock<std::mutex> lock(mFrameQueueMutex);
+  const uint32_t fps = mParams.fps;
+
+  // move frames to the buffer
+  std::list<VideoFrame> buffer;
+  while (!mFrameQueue.empty() && mFrameQueue.front().time <= t) {
+    buffer.emplace_front(std::move(mFrameQueue.front()));
+    mFrameQueue.pop();
+  }
+  lock.unlock();
+
+  // push a blank frame if the queue empty
+  if (buffer.empty()) {
+    VideoFrame vf;
+    vf.time = t;
+    cv::Mat f(mParams.outputSize, CV_8UC3, cv::Scalar(0, 0, 0));
+    resizeAndWatermarkFrame(f, vf.frame, t);
+    buffer.emplace_front(std::move(vf));
+  }
+
+  // extend buffer if frame count less than fps
+  while (buffer.size() < fps) {
+    for (auto it = buffer.begin(); it != buffer.end() && buffer.size() < fps;
+         ++it) {
+      it = buffer.insert(it, *it);
+      ++it;
+    }
+  }
+
+  // shrink buffer if frame count more than fps
+  while (buffer.size() > fps) {
+    buffer.pop_back();
+  }
+
+  // flush buffer into video
+  while (!buffer.empty()) {
+    mVideoWriter->write(buffer.back().frame);
+    buffer.pop_back();
+  }
+
+  // switch to a new chunk if current chunk complete
+  mWrittenFramesCount += fps;
+  const bool newChunk =
+      mParams.uniformChunks
+          ? t % mParams.chunkLengthSec == 0
+          : mWrittenFramesCount >= (mParams.chunkLengthSec * fps);
+  if (mParams.chunkLengthSec > 0 && newChunk) {
+    beginChunk(t);
+  }
+
+  mLastWriteTime = t;
 }
 
-void VideoOutStream::pushFrame(cv::Mat &&frame, time_t t) {
+void VideoOutStream::feed(cv::Mat &&frame, time_t t) {
   VideoFrame vf;
-  vf.time = t != 0 ? t : std::time(nullptr);
+  vf.time = t ? t : std::time(nullptr);
 
   resizeAndWatermarkFrame(frame, vf.frame, vf.time);
 
@@ -102,7 +107,11 @@ void VideoOutStream::resizeAndWatermarkFrame(cv::Mat &frameIn,
   }
 }
 
-bool VideoOutStream::beginChunk() {
+bool VideoOutStream::beginChunk(time_t t) {
+  if (!t) {
+    t = std::time(nullptr);
+  }
+
   // release current video (if exists)
   releaseChunk();
 
@@ -110,6 +119,10 @@ bool VideoOutStream::beginChunk() {
   mVideoWriter.reset(new cv::VideoWriter());
 
   // create a new video file
+  const uint32_t len =
+      mParams.uniformChunks
+          ? (mParams.chunkLengthSec - (t % mParams.chunkLengthSec))
+          : mParams.chunkLengthSec;
   mCurrentVideoFile = FileManager::instance().generateRecordFile(
       mParams.name, mParams.fileExtension, mParams.chunkLengthSec);
 
