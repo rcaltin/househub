@@ -1,7 +1,6 @@
 #pragma once
 
 #include "globals.h"
-#include <mutex>
 #include <queue>
 
 struct VideoFrame {
@@ -29,17 +28,17 @@ public:
 
   bool init(const VideoOutStreamParams &params);
 
-  void update();
+  void update(time_t t);
 
-  void feed(cv::Mat &&frame, time_t t = 0);
+  void feed(cv::Mat &&frame, time_t t);
 
   VideoOutStreamParams &params();
 
 private:
   void resizeAndWatermarkFrame(cv::Mat &frameIn, cv::Mat &frameOut,
-                               time_t t = 0);
+                               time_t t);
 
-  bool beginChunk(time_t t = 0);
+  bool beginChunk(time_t t);
 
   bool releaseChunk();
 
@@ -48,6 +47,5 @@ private:
   time_t mLastWriteTime = 0;
   std::unique_ptr<cv::VideoWriter> mVideoWriter;
   std::queue<VideoFrame> mFrameQueue;
-  std::mutex mFrameQueueMutex;
   std::string mCurrentVideoFile;
 };

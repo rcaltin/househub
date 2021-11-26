@@ -24,16 +24,26 @@ bool Capturer::init(const CapturerParams &params) {
 
       const time_t t = std::time(nullptr);
 
+      // try grab & retrieve a frame
       if (mCapturing && mVideoCapture->isOpened() && mVideoCapture->grab() &&
           mVideoCapture->retrieve(mLastGrabedFrame)) {
         mLastGrabTime = t;
 
+        // filter the frame
         if (mParams.filterK > 1) {
           cv::medianBlur(mLastGrabedFrame, mLastGrabedFrame,
                          mParams.filterK % 2 ? mParams.filterK
                                              : mParams.filterK + 1);
         }
 
+        // flip the frame
+        if (mParams.flipX || mParams.flipY) {
+          const bool fxy = mParams.flipX && mParams.flipY;
+          cv::flip(mLastGrabedFrame, mLastGrabedFrame,
+                   fxy ? -1 : (mParams.flipY ? 1 : 0));
+        }
+
+        // feed the out-stream
         mOutStream->feed(std::move(mLastGrabedFrame), t);
 
         if (!mStreamHealthy) {
@@ -41,6 +51,9 @@ bool Capturer::init(const CapturerParams &params) {
           LOG(INFO) << "capturer in-stream is up: " << mParams.name;
         }
       }
+
+      // update the out-stream
+      mOutStream->update(t);
 
       // stream health check
       if (t - mLastGrabTime > 1) {
@@ -51,8 +64,6 @@ bool Capturer::init(const CapturerParams &params) {
           LOG(WARNING) << "capturer in-stream is down: " << mParams.name;
         }
       }
-
-      mOutStream->update();
     }
   });
 

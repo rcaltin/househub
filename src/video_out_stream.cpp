@@ -7,18 +7,14 @@ VideoOutStream::~VideoOutStream() { releaseChunk(); }
 
 bool VideoOutStream::init(const VideoOutStreamParams &params) {
   mParams = params;
-  return beginChunk();
+  return beginChunk(std::time(nullptr));
 }
 
-void VideoOutStream::update() {
-  const time_t t = std::time(nullptr);
-
+void VideoOutStream::update(time_t t) {
+  // update once per second
   if (!mVideoWriter || t - mLastWriteTime == 0) {
     return;
   }
-
-  std::unique_lock<std::mutex> lock(mFrameQueueMutex);
-  const uint32_t fps = mParams.fps;
 
   // move frames to the buffer
   std::list<VideoFrame> buffer;
@@ -26,7 +22,6 @@ void VideoOutStream::update() {
     buffer.emplace_front(std::move(mFrameQueue.front()));
     mFrameQueue.pop();
   }
-  lock.unlock();
 
   // push a blank frame if the queue empty
   if (buffer.empty()) {
@@ -36,6 +31,8 @@ void VideoOutStream::update() {
     resizeAndWatermarkFrame(f, vf.frame, t);
     buffer.emplace_front(std::move(vf));
   }
+
+  const uint32_t fps = mParams.fps;
 
   // extend buffer if frame count less than fps
   while (buffer.size() < fps) {
@@ -72,12 +69,11 @@ void VideoOutStream::update() {
 
 void VideoOutStream::feed(cv::Mat &&frame, time_t t) {
   VideoFrame vf;
-  vf.time = t ? t : std::time(nullptr);
+  vf.time = t;
 
   resizeAndWatermarkFrame(frame, vf.frame, vf.time);
 
   // enqueue
-  std::unique_lock<std::mutex> lock(mFrameQueueMutex);
   mFrameQueue.emplace(std::move(vf));
 }
 
@@ -108,10 +104,6 @@ void VideoOutStream::resizeAndWatermarkFrame(cv::Mat &frameIn,
 }
 
 bool VideoOutStream::beginChunk(time_t t) {
-  if (!t) {
-    t = std::time(nullptr);
-  }
-
   // release current video (if exists)
   releaseChunk();
 

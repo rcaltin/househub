@@ -79,47 +79,41 @@ int App::exec(int argc, char *argv[]) {
     return ExitCode::RW_ERROR;
   }
 
-  // pre-check capturer count
-  const int capturerCount = cm.getInt("app_settings", "capturer_count", -1);
-  if (capturerCount <= 0) {
-    LOG(FATAL) << "invalid or not defined capturer count.";
-    return ExitCode::BAD_CAPTURER_COUNT;
-  }
-
   // create capturers
-  for (int i = 1; i <= capturerCount; ++i) {
-    const std::string capN = "capturer" + std::to_string(i);
-    if (cm.getString(capN.c_str(), "name", "___N/A") != "___N/A") {
+  const auto &capturers = split(cm.getString("app_settings", "capturers"), '|');
+  for (const auto &capN : capturers) {
+    if (cm.hasSection(capN)) {
       CapturerParams cp;
-      cp.name = cm.getString(capN.c_str(), "name", capN.c_str());
-      cp.type = cm.getString(capN.c_str(), "type", "default");
+      cp.name = cm.getString(capN, "name", capN);
+      cp.type = cm.getString(capN, "type", "default");
+      cp.filterK = cm.getInt(capN, "filter_k", 0);
+      cp.flipX = cm.getBool(capN, "flip_x", false);
+      cp.flipX = cm.getBool(capN, "flip_y", false);
       cp.streamUri =
-          cm.getString(capN.c_str(), "stream_uri", "localhost/stream");
-      cp.filterK = cm.getInt(capN.c_str(), "filter_k", 0);
+          cm.getString(capN, "stream_uri", "http://localhost/stream");
       cp.videoOutStreamParams.name = cp.name;
 
-      cp.videoOutStreamParams.fps = cm.getInt(capN.c_str(), "output_fps", 10);
+      cp.videoOutStreamParams.fps = cm.getInt(capN, "output_fps", 10);
 
       cp.videoOutStreamParams.outputSize =
-          cv::Size(cm.getInt(capN.c_str(), "output_width", 1024),
-                   cm.getInt(capN.c_str(), "output_height", 768));
+          cv::Size(cm.getInt(capN, "output_width", 1024),
+                   cm.getInt(capN, "output_height", 768));
 
       cp.videoOutStreamParams.chunkLengthSec =
-          cm.getInt(capN.c_str(), "chunk_length_sec", 60);
+          cm.getInt(capN, "chunk_length_sec", 60);
 
       cp.videoOutStreamParams.uniformChunks =
-          cm.getBool(capN.c_str(), "uniform_chunks", true);
+          cm.getBool(capN, "uniform_chunks", true);
 
       cp.videoOutStreamParams.fileExtension =
-          cm.getString(capN.c_str(), "file_extension", ".avi");
+          cm.getString(capN, "file_extension", ".avi");
 
-      cp.videoOutStreamParams.watermark =
-          cm.getBool(capN.c_str(), "watermark", true);
+      cp.videoOutStreamParams.watermark = cm.getBool(capN, "watermark", true);
 
       cp.videoOutStreamParams.useLocaltime =
-          cm.getBool(capN.c_str(), "use_localtime", true);
+          cm.getBool(capN, "use_localtime", true);
 
-      const std::string fourcc = cm.getString(capN.c_str(), "fourcc", "mjpg");
+      const std::string fourcc = cm.getString(capN, "fourcc", "mjpg");
       if (fourcc.length() != 4) {
         LOG(FATAL) << "bad fourcc value.";
         return ExitCode::BAD_FOURCC;
@@ -148,7 +142,7 @@ int App::exec(int argc, char *argv[]) {
     }
   }
 
-  // post-check capturer count
+  // check capturer count
   if (mCapturers.size() == 0) {
     LOG(FATAL) << "no capturer loaded. check ini definitions.";
     return ExitCode::NO_CAPTURER;
