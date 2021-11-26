@@ -13,6 +13,10 @@ public:
 
   bool init(const std::string &iniFile);
 
+  bool hasSection(const std::string &section);
+
+  bool hasSectionKey(const std::string &section, const std::string &key);
+
   bool getBool(const std::string &section, const std::string &key,
                bool defaultValue = false) const;
 

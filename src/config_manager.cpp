@@ -1,4 +1,5 @@
 #include "config_manager.h"
+#include "globals.h"
 #include <algorithm>
 #include <ini.h>
 
@@ -12,6 +13,24 @@ ConfigManager &ConfigManager::instance() {
 bool ConfigManager::init(const std::string &iniFile) {
 
   return ini_parse(iniFile.c_str(), iniHandler, &mMap) == 0;
+}
+
+bool ConfigManager::hasSection(const std::string &section) {
+  for (auto &kv : mMap) {
+    if (split(kv.first, '|').at(0) == section) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool ConfigManager::hasSectionKey(const std::string &section,
+                                  const std::string &key) {
+  const std::string k{section + "|" + key};
+
+  auto it = mMap.find(k);
+  return it != mMap.end();
 }
 
 bool ConfigManager::getBool(const std::string &section, const std::string &key,

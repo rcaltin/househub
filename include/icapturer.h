@@ -7,6 +7,8 @@ struct CapturerParams {
   std::string type;
   std::string streamUri;
   uint32_t filterK = {0};
+  bool flipX{false};
+  bool flipY{false};
   VideoOutStreamParams videoOutStreamParams;
 };
 
