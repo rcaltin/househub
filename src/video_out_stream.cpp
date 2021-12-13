@@ -27,8 +27,13 @@ void VideoOutStream::update(time_t t) {
   if (buffer.empty()) {
     VideoFrame vf;
     vf.time = t;
-    cv::Mat f(mParams.outputSize, CV_8UC3, cv::Scalar(0, 0, 0));
-    resizeAndWatermarkFrame(f, vf.frame, t);
+    vf.frame = cv::Mat(mParams.outputSize, CV_8UC3, cv::Scalar(0, 0, 0));
+
+    // watermark
+    if (mParams.watermark) {
+      watermarkFrame(vf.frame, t);
+    }
+
     buffer.emplace_front(std::move(vf));
   }
 
@@ -70,8 +75,12 @@ void VideoOutStream::update(time_t t) {
 void VideoOutStream::feed(cv::Mat &&frame, time_t t) {
   VideoFrame vf;
   vf.time = t;
+  vf.frame = std::move(frame);
 
-  resizeAndWatermarkFrame(frame, vf.frame, vf.time);
+  // watermark
+  if (mParams.watermark) {
+    watermarkFrame(vf.frame, vf.time);
+  }
 
   // enqueue
   mFrameQueue.emplace(std::move(vf));
@@ -79,28 +88,20 @@ void VideoOutStream::feed(cv::Mat &&frame, time_t t) {
 
 VideoOutStreamParams &VideoOutStream::params() { return mParams; }
 
-void VideoOutStream::resizeAndWatermarkFrame(cv::Mat &frameIn,
-                                             cv::Mat &frameOut, time_t t) {
+void VideoOutStream::watermarkFrame(cv::Mat &frame, time_t t) {
   if (!t) {
     t = std::time(nullptr);
   }
 
-  // resize
-  cv::resize(frameIn, frameOut, mParams.outputSize);
+  std::string label = timeString(t, mParams.useLocaltime) + " " + mParams.name;
 
-  // watermark
-  if (mParams.watermark) {
-    std::string label =
-        timeString(t, mParams.useLocaltime) + " " + mParams.name;
+  // grey wide label as border
+  cv::putText(frame, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN, 1.5f,
+              cv::Scalar(128, 128, 128, 128), 3, false);
 
-    // grey wide label as border
-    cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN,
-                1.5f, cv::Scalar(128, 128, 128, 128), 3, false);
-
-    // white narrow label as body
-    cv::putText(frameOut, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN,
-                1.5f, cv::Scalar(255, 255, 255, 128), 1, false);
-  }
+  // white narrow label as body
+  cv::putText(frame, label, cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN, 1.5f,
+              cv::Scalar(255, 255, 255, 128), 1, false);
 }
 
 bool VideoOutStream::beginChunk(time_t t) {
@@ -138,8 +139,9 @@ bool VideoOutStream::releaseChunk() {
 
   mVideoWriter->release();
 
-  // rename the file if incomplete
-  if (mWrittenFramesCount < mParams.chunkLengthSec * mParams.fps) {
+  // rename the file if incomplete or length is infinite
+  if (mParams.chunkLengthSec == 0 ||
+      mWrittenFramesCount < mParams.chunkLengthSec * mParams.fps) {
     const uint32_t len = mWrittenFramesCount / mParams.fps;
     const std::string &newFileName = FileManager::instance().generateRecordFile(
         mParams.name, mParams.fileExtension, len, mLastWriteTime - len);

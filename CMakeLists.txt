@@ -25,13 +25,13 @@ include_directories(
 
 # project sources
 set(SOURCES
-	src/main.cpp
+    src/main.cpp
     src/app.cpp
     src/capturer.cpp
     src/capturer_factory.cpp
     src/config_manager.cpp
     src/file_manager.cpp
-	src/video_out_stream.cpp
+    src/video_out_stream.cpp
 )
 
 # add executable

@@ -6,13 +6,7 @@
 #include "globals.h"
 #include <csignal>
 
-void signalHandler(int signum) {
-  LOG(INFO) << "!! Signal " << signum << " received. Terminating... !!";
-
-  App::ExitFlag = true;
-}
-
-bool App::ExitFlag = false;
+std::atomic_bool App::sExitFlag = false;
 
 App::App() {
   signal(SIGINT, signalHandler);
@@ -22,11 +16,11 @@ App::App() {
 
 App::~App() {}
 
-int App::exec(int argc, char *argv[]) {
+ExitCode App::exec(int argc, char *argv[]) {
   google::InitGoogleLogging(argv[0]);
   google::SetStderrLogging(google::GLOG_INFO);
 
-  LOG(INFO) << "househub preparing... ";
+  LOG(INFO) << "househub is preparing... ";
 
 #ifdef WIN32
   std::string iniFile = "C:/househub.ini";
@@ -38,7 +32,46 @@ int App::exec(int argc, char *argv[]) {
   }
 
   // init config-manager
-  ConfigManager &cm = ConfigManager::instance();
+  if (ExitCode c = initConfigManager(iniFile)) {
+    return c;
+  }
+
+  // init logging
+  if (ExitCode c = initLogging()) {
+    return c;
+  }
+
+  // init file-manager
+  if (ExitCode c = initFileManager()) {
+    return c;
+  }
+
+  // init capturers
+  if (ExitCode c = initCapturers()) {
+    return c;
+  }
+
+  LOG(INFO) << "househub is started.";
+
+  // main loop
+  std::string cmd;
+  while (!sExitFlag) {
+    std::cin >> cmd;
+    if (cmd == "q") {
+      exit();
+    }
+  }
+
+  LOG(INFO) << "househub is stopped.";
+
+  return ExitCode::NORMAL;
+}
+
+void App::exit() { sExitFlag = true; }
+
+ExitCode App::initConfigManager(const std::string &iniFile) {
+  auto &cm = ConfigManager::instance();
+
   if (!cm.init(iniFile)) {
     LOG(FATAL) << "bad ini format: " << iniFile;
     return ExitCode::BAD_INI_FORMAT;
@@ -49,6 +82,12 @@ int App::exec(int argc, char *argv[]) {
     LOG(FATAL) << "bad ini version: " << iniFile;
     return ExitCode::BAD_INI_VERSION;
   }
+
+  return ExitCode::NORMAL;
+}
+
+ExitCode App::initLogging() {
+  auto &cm = ConfigManager::instance();
 
   // create log dir
   const std::string logDir =
@@ -65,7 +104,12 @@ int App::exec(int argc, char *argv[]) {
   // set log overdue days
   google::EnableLogCleaner(cm.getInt("app_settings", "log_overdue_days", 30));
 
-  // init file-manager
+  return ExitCode::NORMAL;
+}
+
+ExitCode App::initFileManager() {
+  auto &cm = ConfigManager::instance();
+
   FileManagerParams fmp;
   fmp.recordDir =
       cm.getString("file_manager", "record_dir", "./househub-records/");
@@ -74,12 +118,19 @@ int App::exec(int argc, char *argv[]) {
   fmp.recordDirSizeCheckIntervalSec =
       cm.getInt("file_manager", "record_dir_size_check_interval_sec", 10);
   fmp.useLocalTime = cm.getBool("file_manager", "use_localtime", false);
-  if (!FileManager::instance().init(fmp)) {
+
+  auto &fm = FileManager::instance();
+  if (!fm.init(fmp)) {
     LOG(FATAL) << "file directory r/w error: " << fmp.recordDir;
     return ExitCode::RW_ERROR;
   }
 
-  // create capturers
+  return ExitCode::NORMAL;
+}
+
+ExitCode App::initCapturers() {
+  auto &cm = ConfigManager::instance();
+
   const auto &capturers = split(cm.getString("app_settings", "capturers"), '|');
   for (const auto &capN : capturers) {
     if (cm.hasSection(capN)) {
@@ -148,16 +199,11 @@ int App::exec(int argc, char *argv[]) {
     return ExitCode::NO_CAPTURER;
   }
 
-  LOG(INFO) << "househub started.";
+  return ExitCode::NORMAL;
+}
 
-  // main loop
-  using namespace std::chrono_literals;
-  while (!ExitFlag) {
-    // TODO command line interface
-    std::this_thread::sleep_for(100ms);
-  }
+void App::signalHandler(int signum) {
+  LOG(INFO) << "!! Signal " << signum << " received. Terminating... !!";
 
-  LOG(INFO) << "househub stopped.";
-
-  return ExitCode::NORMAL_EXIT;
+  exit();
 }
