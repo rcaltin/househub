@@ -10,7 +10,7 @@
 #define REQUIRED_INI_VERSION 1
 
 enum ExitCode : int {
-  NORMAL_EXIT = 0,
+  NORMAL = 0,
   BAD_INI_FORMAT = -1,
   BAD_INI_VERSION = -2,
   RW_ERROR = -3,

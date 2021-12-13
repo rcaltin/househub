@@ -35,8 +35,7 @@ public:
   VideoOutStreamParams &params();
 
 private:
-  void resizeAndWatermarkFrame(cv::Mat &frameIn, cv::Mat &frameOut,
-                               time_t t);
+  void watermarkFrame(cv::Mat &frame, time_t t);
 
   bool beginChunk(time_t t);
 

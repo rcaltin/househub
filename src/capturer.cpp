@@ -29,6 +29,10 @@ bool Capturer::init(const CapturerParams &params) {
           mVideoCapture->retrieve(mLastGrabedFrame)) {
         mLastGrabTime = t;
 
+        // resize
+        cv::resize(mLastGrabedFrame, mLastGrabedFrame,
+                   mParams.videoOutStreamParams.outputSize);
+
         // filter the frame
         if (mParams.filterK > 1) {
           cv::medianBlur(mLastGrabedFrame, mLastGrabedFrame,
