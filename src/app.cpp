@@ -54,12 +54,8 @@ ExitCode App::exec(int argc, char *argv[]) {
   LOG(INFO) << "househub is started.";
 
   // main loop
-  std::string cmd;
   while (!sExitFlag) {
-    std::cin >> cmd;
-    if (cmd == "q") {
-      exit();
-    }
+    std::this_thread::yield();
   }
 
   LOG(INFO) << "househub is stopped.";

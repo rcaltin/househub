@@ -28,16 +28,18 @@ public:
 
   bool init(const VideoOutStreamParams &params);
 
-  void update(time_t t);
+  void update(const time_t t);
 
-  void feed(cv::Mat &&frame, time_t t);
+  void feed(cv::Mat &&frame, const time_t t);
 
   VideoOutStreamParams &params();
 
 private:
-  void watermarkFrame(cv::Mat &frame, time_t t);
+  void processQueueForTime(const time_t t);
 
-  bool beginChunk(time_t t);
+  void watermarkFrame(cv::Mat &frame, const time_t t);
+
+  bool beginChunk(const time_t t);
 
   bool releaseChunk();
 
