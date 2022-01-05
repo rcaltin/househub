@@ -66,6 +66,5 @@ Hereby your Pi turned into a 7/24 recorder. Congrats!
 - Web UI for Record Playback
 - Human/Motion Detection Tags for records
 
-### Known Issues
-- Rarely video chunks are missing few frames, so few seconds less files are getting generated in uniform chunks mode
+## Known Issues
 - Record directory size limits grows around %10 more than the actual limit
