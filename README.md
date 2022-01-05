@@ -14,5 +14,4 @@ N-Channel video stream recorder software, especially targeted for usage on **Ras
 - Human/Motion Detection Tags for records
 
 ## Known Issues
-- Rarely video chunks are missing few frames, so few seconds less files are getting generated in uniform chunks mode
 - Record directory size limits grows around %10 more than the actual limit

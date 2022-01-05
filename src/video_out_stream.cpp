@@ -13,17 +13,15 @@ bool VideoOutStream::init(const VideoOutStreamParams &params) {
 
 void VideoOutStream::update(const time_t t) {
 
-  if (!mVideoWriter) {
+  // update once per second
+  if (t == mLastWriteTime || !mVideoWriter) {
     return;
   }
 
-  // process the queue for every second since last write
-  for (time_t i = mLastWriteTime + 1; i <= t; ++i) {
-    processQueueForTime(i);
+  // process the queue for every second since last update till t - 1
+  while (mLastWriteTime < t) {
+    processQueueForTime(mLastWriteTime + 1);
   }
-
-  // clear the queue
-  mFrameQueue = {};
 }
 
 void VideoOutStream::feed(cv::Mat &&frame, const time_t t) {
@@ -45,7 +43,7 @@ VideoOutStreamParams &VideoOutStream::params() { return mParams; }
 void VideoOutStream::processQueueForTime(const time_t t) {
   // move frames to the buffer
   std::list<VideoFrame> buffer;
-  while (!mFrameQueue.empty() && mFrameQueue.front().time == t) {
+  while (!mFrameQueue.empty() && mFrameQueue.front().time <= t) {
     buffer.emplace_back(std::move(mFrameQueue.front()));
     mFrameQueue.pop();
   }
@@ -66,18 +64,27 @@ void VideoOutStream::processQueueForTime(const time_t t) {
 
   // extend the buffer when frame count less than fps
   while (buffer.size() < mParams.fps) {
-    buffer.push_back(buffer.back()); // duplicate the newest frame
+    // duplicate the buffer frames for a smooth video (bound to the fps)
+    for (auto it = buffer.begin();
+         it != buffer.end() && buffer.size() < mParams.fps; ++it) {
+      it = buffer.insert(it, *it);
+      ++it; // skip newly inserted
+    }
   }
 
   // shrink the buffer when frame count more than fps
   while (buffer.size() > mParams.fps) {
-    buffer.pop_front(); // pop the oldest frame
+    // erase half of the buffer frames for a smooth video (bound to the fps)
+    for (auto it = buffer.begin();
+         it != buffer.end() && buffer.size() > mParams.fps; ++it) {
+      it = buffer.erase(it);
+    }
   }
 
   // flush the buffer into the video file
   while (!buffer.empty()) {
     mVideoWriter->write(buffer.front().frame);
-    buffer.pop_back();
+    buffer.pop_front();
     mWrittenFramesCount++;
   }
 
